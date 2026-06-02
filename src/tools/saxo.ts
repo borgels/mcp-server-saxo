@@ -23,6 +23,7 @@ import { reviewStrategyPositions } from '../saxo/position-strategy-review.js';
 import {
   getBalance,
   getOrder,
+  getPerformanceTimeseries,
   listAccounts,
   listActivities,
   listClosedPositions,
@@ -1132,6 +1133,36 @@ export function registerSaxoTools(server: McpServer, client: SaxoClient): void {
     async input =>
       runAuditedTool(client, 'saxo_list_activities', input, async () =>
         jsonToolResult(await listActivities(client, input)),
+      ),
+  );
+
+  server.registerTool(
+    'saxo_get_performance_timeseries',
+    {
+      title: 'Get Account Performance Time Series',
+      description:
+        'Daily account value (NAV) / performance time series from /hist/v4/performance/timeseries (Saxo Historical Performance). The right tool for "what has my account been worth each day since I started/funded it?". Scope with fromDate/toDate (YYYY-MM-DD) or standardPeriod (e.g. "Month", "Quarter", "Year", "AllTime"). Omit fieldGroups for Saxo\'s default payload, or pass explicit FieldGroups (e.g. "BalancePerformance") to control which metrics return.',
+      inputSchema: {
+        clientKey: z.string().trim().min(1).optional(),
+        accountKey: z.string().trim().min(1).optional(),
+        standardPeriod: z.string().trim().min(1).optional(),
+        fromDate: z
+          .string()
+          .trim()
+          .regex(/^\d{4}-\d{2}-\d{2}$/, 'Use ISO 8601 date YYYY-MM-DD.')
+          .optional(),
+        toDate: z
+          .string()
+          .trim()
+          .regex(/^\d{4}-\d{2}-\d{2}$/, 'Use ISO 8601 date YYYY-MM-DD.')
+          .optional(),
+        fieldGroups: z.array(z.string().trim().min(1)).optional(),
+      },
+      annotations: READ_TOOL_ANNOTATIONS,
+    },
+    async input =>
+      runAuditedTool(client, 'saxo_get_performance_timeseries', input, async () =>
+        jsonToolResult(await getPerformanceTimeseries(client, input)),
       ),
   );
 
