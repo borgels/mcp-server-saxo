@@ -190,3 +190,33 @@ export async function getOrder(client: SaxoClient, input: GetOrderInput): Promis
     FieldGroups: input.fieldGroups?.join(','),
   });
 }
+
+export interface GetPerformanceTimeseriesInput {
+  clientKey?: string;
+  accountKey?: string;
+  standardPeriod?: string;
+  fromDate?: string;
+  toDate?: string;
+  fieldGroups?: string[];
+}
+
+export async function getPerformanceTimeseries(
+  client: SaxoClient,
+  input: GetPerformanceTimeseriesInput,
+): Promise<unknown> {
+  // Saxo Historical Performance. /hist/v4/performance/timeseries returns the
+  // account value (NAV) series over the requested period — the right source
+  // for "what has my account been worth each day?". ClientKey is required even
+  // when AccountKey is supplied, so fall back to the session's ClientKey.
+  // Scope with StandardPeriod (e.g. Month/Quarter/Year/AllTime) or an explicit
+  // FromDate/ToDate window; omit FieldGroups to get Saxo's default payload.
+  const clientKey = input.clientKey ?? (await client.resolveClientKey());
+  return client.get('/hist/v4/performance/timeseries', {
+    ClientKey: clientKey,
+    AccountKey: input.accountKey,
+    StandardPeriod: input.standardPeriod,
+    FromDate: input.fromDate,
+    ToDate: input.toDate,
+    FieldGroups: input.fieldGroups?.join(','),
+  });
+}

@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `saxo_get_performance_timeseries` returns the account value (NAV) /
+  performance time series from Saxo Historical Performance
+  (`/hist/v4/performance/timeseries`), scoped by `fromDate`/`toDate` or
+  `standardPeriod` — the source for daily account-value history.
 - `saxo_get_session_capabilities` and `saxo_set_session_trade_level` expose
   Saxo session capabilities and allow confirmed `TradeLevel` changes.
 - Session capability diagnostics now keep an in-memory last-known state from a
