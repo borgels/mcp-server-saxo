@@ -1,4 +1,5 @@
 import type { SaxoClient } from './client.js';
+import { pathSegment } from './path.js';
 
 export interface ListAccountsInput {
   clientKey?: string;
@@ -185,7 +186,7 @@ export interface GetOrderInput {
 
 export async function getOrder(client: SaxoClient, input: GetOrderInput): Promise<unknown> {
   const clientKey = input.clientKey ?? (await client.resolveClientKey());
-  return client.get(`/port/v1/orders/${encodeURIComponent(input.orderId)}`, {
+  return client.get(`/port/v1/orders/${pathSegment(input.orderId, 'orderId')}`, {
     ClientKey: clientKey,
     FieldGroups: input.fieldGroups?.join(','),
   });

@@ -142,6 +142,11 @@ export interface OrderPolicyInput {
   OrderType?: string;
   OrderPrice?: number;
   StopPrice?: number;
+  /**
+   * Market reference price (e.g. from /trade/v1/infoprices) used to compute
+   * notional when the order itself carries no usable price (market orders).
+   */
+  ReferencePrice?: number;
 }
 
 export interface PolicyDecision {
@@ -255,18 +260,59 @@ export function checkOrder(input: OrderPolicyInput, policy: SaxoPolicy): void {
   }
 
   if (typeof policy.max_notional === 'number' && typeof input.Amount === 'number') {
-    const price = input.OrderPrice ?? input.StopPrice;
-    if (typeof price === 'number') {
-      const multiplier = contractMultiplier(input.AssetType);
-      const notional = input.Amount * price * multiplier;
-      if (notional > policy.max_notional) {
-        throw new SaxoPolicyDeniedError(
-          'saxo_place_order',
-          `Notional ${notional} (Amount × OrderPrice × multiplier ${multiplier}) exceeds policy max_notional (${policy.max_notional}).`,
-        );
-      }
+    const price = notionalPrice(input);
+    if (price === undefined) {
+      // Fail closed: a notional cap is configured but we cannot price the order.
+      throw new SaxoPolicyDeniedError(
+        'saxo_place_order',
+        'policy.max_notional is set but no price is available to compute notional (no OrderPrice/StopPrice and no market quote); refusing order.',
+      );
+    }
+    const multiplier = contractMultiplier(input.AssetType);
+    const notional = input.Amount * price * multiplier;
+    if (notional > policy.max_notional) {
+      throw new SaxoPolicyDeniedError(
+        'saxo_place_order',
+        `Notional ${notional} (Amount × price ${price} × multiplier ${multiplier}) exceeds policy max_notional (${policy.max_notional}).`,
+      );
     }
   }
+}
+
+function isPositiveFinite(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0;
+}
+
+export function isMarketOrderType(orderType: string | undefined): boolean {
+  return typeof orderType === 'string' && orderType.trim().toLowerCase() === 'market';
+}
+
+/**
+ * Price used for the max_notional check. Market orders ignore any
+ * caller-supplied OrderPrice/StopPrice (Saxo does not use them) and rely on
+ * the market reference price. Other order types use the larger of the
+ * supplied prices, falling back to the reference price.
+ */
+export function notionalPrice(input: OrderPolicyInput): number | undefined {
+  const reference = isPositiveFinite(input.ReferencePrice) ? input.ReferencePrice : undefined;
+  if (isMarketOrderType(input.OrderType)) {
+    return reference;
+  }
+  const supplied = [input.OrderPrice, input.StopPrice]
+    .map(value => (typeof value === 'number' && Number.isFinite(value) ? Math.abs(value) : undefined))
+    .filter((value): value is number => value !== undefined && value > 0);
+  if (supplied.length) {
+    return Math.max(...supplied);
+  }
+  return reference;
+}
+
+/** True when checkOrder will need a ReferencePrice to evaluate max_notional. */
+export function orderNeedsReferencePrice(input: OrderPolicyInput, policy: SaxoPolicy): boolean {
+  if (typeof policy.max_notional !== 'number' || typeof input.Amount !== 'number') {
+    return false;
+  }
+  return notionalPrice({ ...input, ReferencePrice: undefined }) === undefined;
 }
 
 export function contractMultiplier(assetType: string | undefined): number {
@@ -369,6 +415,13 @@ export function checkMultiLegOrder(input: MultiLegPolicyInput, policy: SaxoPolic
     if (typeof leg.Amount === 'number' && leg.Amount > maxLegAmount) {
       maxLegAmount = leg.Amount;
     }
+  }
+
+  if (typeof policy.max_notional === 'number' && maxLegAmount > 0 && typeof input.OrderPrice !== 'number') {
+    throw new SaxoPolicyDeniedError(
+      'saxo_place_multileg_order',
+      'policy.max_notional is set but the multi-leg order has no OrderPrice to compute notional; refusing order.',
+    );
   }
 
   if (typeof policy.max_notional === 'number' && typeof input.OrderPrice === 'number' && maxLegAmount > 0) {

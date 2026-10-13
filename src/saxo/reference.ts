@@ -1,4 +1,5 @@
 import type { SaxoClient } from './client.js';
+import { pathSegment } from './path.js';
 
 export interface SearchInstrumentsInput {
   keywords?: string;
@@ -49,7 +50,7 @@ export interface ListExchangesInput {
 
 export function listExchanges(client: SaxoClient, input: ListExchangesInput): Promise<unknown> {
   if (input.exchangeId) {
-    return client.get(`/ref/v1/exchanges/${encodeURIComponent(input.exchangeId)}`);
+    return client.get(`/ref/v1/exchanges/${pathSegment(input.exchangeId, 'exchangeId')}`);
   }
 
   return client.get('/ref/v1/exchanges', {
@@ -97,7 +98,7 @@ export async function getOptionChain(
   input: GetOptionChainInput,
 ): Promise<OptionChainRawResponse> {
   const response = await client.get<OptionChainRawResponse>(
-    `/ref/v1/instruments/contractoptionspaces/${encodeURIComponent(input.optionRootId)}`,
+    `/ref/v1/instruments/contractoptionspaces/${pathSegment(input.optionRootId, 'optionRootId')}`,
     {
       ExpiryDates: input.expiryDates?.join(','),
       StrikeCount: input.strikeCount,

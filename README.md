@@ -163,8 +163,12 @@ authorize endpoint with a PKCE challenge, and writes
 2. For the smooth local flow, call `saxo_oauth_login`. It starts the loopback
    listener, opens the browser by default, waits for approval, exchanges the
    code, and updates the running MCP server in memory.
-3. Tokens are not written to disk unless `writeToEnvFile=true` is supplied.
-   Use `envFilePath` when you want a specific file such as `.env.local`.
+3. Tokens are not written to disk unless `writeToEnvFile=true` is supplied,
+   in which case they are written to `.env` in the server's working
+   directory (the target path is not configurable from the tool call).
+
+The `saxo_oauth_*` tools are only registered on the local stdio transport;
+the optional HTTP server does not expose them.
 
 For clients that want to control their own UI, use the lower-level two-step
 flow: call `saxo_oauth_start`, open the returned `authorizeUrl` (or set
@@ -559,13 +563,17 @@ A copy of `policy.example.json` is included. Supported fields:
 | `allow_live_writes` | Master switch for all order writes on LIVE. |
 | `allow_live_alert_writes` | Master switch for price-alert create/update/delete/settings writes on LIVE. |
 | `allow_live_session_capability_writes` | Allows changing LIVE session TradeLevel (`FullTradingAndChat` / `OrdersOnly`). |
-| `require_precheck_on_live` | Place-order automatically runs precheck first. |
+| `require_precheck_on_live` | On LIVE, place/modify (single and multi-leg) run a Saxo precheck first and abort unless it returns `PreCheckResult: Ok` with no `ErrorInfo`. |
 | `allow_short_option_legs` | Set to `false` when the Saxo option profile does not permit opening short option legs; multi-leg write tools then block sell-to-open option legs before calling Saxo. |
 | `allowed_asset_types` | Whitelist of AssetTypes that may be ordered. |
 | `allowed_account_keys` | Whitelist of AccountKeys that may be traded. |
 | `denied_uics` | Blocklist of Uics. |
 | `max_order_amount` | Per-AssetType caps; `default` falls back when no specific entry. |
-| `max_notional` | Cap on `Amount * (OrderPrice or StopPrice) * contract_multiplier`. Multiplier is 100 for `StockOption` / `IndexOption` / `StockIndexOption` / `FuturesOption`, 1 otherwise. For multi-leg spreads, applied as `|OrderPrice| * largest leg Amount * multiplier`. |
+| `max_notional` | Cap on `Amount * (OrderPrice or StopPrice) * contract_multiplier`. Multiplier is 100 for `StockOption` / `IndexOption` / `StockIndexOption` / `FuturesOption`, 1 otherwise. For multi-leg spreads, applied as `|OrderPrice| * largest leg Amount * multiplier`. Market orders (and orders without a price) are priced from a live `infoprices` quote; if no price can be obtained the order is refused. Related (`Orders[]`) orders are checked individually. |
+
+`saxo_modify_order` / `saxo_modify_multileg_order` load the existing order
+from Saxo and evaluate the policy against the real order merged with the
+requested changes; a mismatching `AccountKey`/`Uic`/`AssetType` is refused.
 
 Even on SIM, all write tools run through the policy check (it just defaults
 to permissive). Use the policy in SIM too if you want predictable limits.
@@ -582,8 +590,10 @@ PORT=3000 SAXO_ACCESS_TOKEN=... npm run dev:http
 By default the HTTP server binds to `127.0.0.1`, limits request bodies to
 10 MiB, allows browser CORS only from loopback origins, and does not require
 an HTTP Bearer token. Override with `MCP_HTTP_HOST`, `MCP_MAX_BODY_BYTES`,
-`MCP_ALLOWED_ORIGINS`, `MCP_ALLOW_ANY_ORIGIN=true`, and `MCP_HTTP_TOKEN`. The
-MCP endpoint is `POST http://127.0.0.1:3000/mcp`.
+`MCP_ALLOWED_ORIGINS`, `MCP_ALLOW_ANY_ORIGIN=true`, and `MCP_HTTP_TOKEN`
+(compared in constant time). The MCP endpoint is
+`POST http://127.0.0.1:3000/mcp`. The `saxo_oauth_*` tools are not available
+over HTTP.
 
 ## Verification
 

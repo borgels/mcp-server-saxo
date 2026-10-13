@@ -1,3 +1,4 @@
+import { createHash, timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 
 export class HttpRequestError extends Error {
@@ -31,9 +32,25 @@ export function assertAuthorized(req: IncomingMessage, config = getHttpConfig())
     return;
   }
 
-  if (req.headers.authorization !== `Bearer ${config.httpToken}`) {
+  if (!constantTimeEquals(req.headers.authorization, `Bearer ${config.httpToken}`)) {
     throw new HttpRequestError(401, 'Unauthorized');
   }
+}
+
+function sha256(value: string): Buffer {
+  return createHash('sha256').update(value, 'utf8').digest();
+}
+
+/**
+ * Compare a presented credential against the expected value without leaking
+ * timing information about the expected value. Both sides are hashed first so
+ * the buffers always have equal length.
+ */
+export function constantTimeEquals(presented: string | string[] | undefined, expected: string): boolean {
+  if (typeof presented !== 'string') {
+    return false;
+  }
+  return timingSafeEqual(sha256(presented), sha256(expected));
 }
 
 export function assertAllowedOrigin(req: IncomingMessage): void {

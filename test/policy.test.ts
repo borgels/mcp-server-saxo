@@ -227,7 +227,41 @@ describe('Saxo policy.checkOrder', () => {
     const policy: SaxoPolicy = { ...DEFAULT_POLICY, max_notional: 1000 };
     expect(() => checkOrder({ Amount: 100, OrderPrice: 20 }, policy)).toThrow(SaxoPolicyDeniedError);
     expect(() => checkOrder({ Amount: 10, OrderPrice: 20 }, policy)).not.toThrow();
-    expect(() => checkOrder({ Amount: 100 }, policy)).not.toThrow();
+    // Fail closed: notional cap configured but no price available.
+    expect(() => checkOrder({ Amount: 100 }, policy)).toThrow(/no price is available/);
+  });
+
+  it('prices market orders from ReferencePrice, ignoring caller-supplied OrderPrice', () => {
+    const policy: SaxoPolicy = { ...DEFAULT_POLICY, max_notional: 1000 };
+    expect(() =>
+      checkOrder({ Amount: 100, OrderType: 'Market', OrderPrice: 0.01 }, policy),
+    ).toThrow(/no price is available/);
+    expect(() =>
+      checkOrder({ Amount: 100, OrderType: 'Market', OrderPrice: 0.01, ReferencePrice: 50 }, policy),
+    ).toThrow(SaxoPolicyDeniedError);
+    expect(() =>
+      checkOrder({ Amount: 10, OrderType: 'Market', ReferencePrice: 50 }, policy),
+    ).not.toThrow();
+  });
+
+  it('uses the larger of OrderPrice/StopPrice and absolute values', () => {
+    const policy: SaxoPolicy = { ...DEFAULT_POLICY, max_notional: 1000 };
+    expect(() => checkOrder({ Amount: 10, OrderType: 'StopLimit', OrderPrice: 1, StopPrice: 200 }, policy)).toThrow(
+      SaxoPolicyDeniedError,
+    );
+    expect(() => checkOrder({ Amount: 10, OrderType: 'Limit', OrderPrice: -200 }, policy)).toThrow(
+      SaxoPolicyDeniedError,
+    );
+  });
+
+  it('refuses multi-leg orders without OrderPrice when max_notional is set', () => {
+    const policy: SaxoPolicy = { ...DEFAULT_POLICY, max_notional: 1000 };
+    expect(() =>
+      checkMultiLegOrder(
+        { AccountKey: 'k', Legs: [{ Uic: 1, AssetType: 'StockOption', Amount: 1, BuySell: 'Buy' }] },
+        policy,
+      ),
+    ).toThrow(/no OrderPrice/);
   });
 });
 

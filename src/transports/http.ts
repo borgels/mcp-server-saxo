@@ -35,7 +35,9 @@ const httpServer = createNodeServer(async (req, res) => {
 
     assertAuthorized(req, config);
     const body = await readJsonBody(req, config.maxBodyBytes);
-    const mcpServer = createMcpServer();
+    // OAuth tools (loopback listener, browser launch, token replacement,
+    // .env writes) are local-only and never exposed over HTTP.
+    const mcpServer = createMcpServer({ enableOauthTools: false });
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
     });
