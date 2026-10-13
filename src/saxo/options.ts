@@ -1,4 +1,5 @@
 import type { SaxoClient } from './client.js';
+import { pathSegment } from './path.js';
 import {
   getOptionVolatilityContext,
   type OptionVolatilityContext,
@@ -309,7 +310,7 @@ export async function getOptionChain(
 ): Promise<OptionChainResult> {
   const root = await resolveOptionRoot(client, input);
   const space = await client.get<ContractOptionSpace>(
-    `/ref/v1/instruments/contractoptionspaces/${encodeURIComponent(String(root.optionRootId))}`,
+    `/ref/v1/instruments/contractoptionspaces/${pathSegment(root.optionRootId, 'optionRootId')}`,
     { AccountKey: input.accountKey },
   );
   const contractSize = space.ContractSize ?? 100;
@@ -599,7 +600,7 @@ async function enrichSingleLegPricing(
     if (created) {
       try {
         await client.delete(
-          `/trade/v1/prices/subscriptions/${encodeURIComponent(contextId)}/${encodeURIComponent(referenceId)}`,
+          `/trade/v1/prices/subscriptions/${pathSegment(contextId, 'ContextId')}/${pathSegment(referenceId, 'ReferenceId')}`,
         );
       } catch {
         // Best-effort cleanup. Saxo also expires inactive subscriptions.

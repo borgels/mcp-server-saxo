@@ -40,6 +40,13 @@ import {
   type OrderPolicyInput,
 } from '../saxo/policy.js';
 import {
+  enforceModifyMultiLegPolicy,
+  enforceModifyOrderPolicy,
+  enforcePlaceOrderPolicy,
+  runRequiredMultiLegPrecheck,
+  runRequiredPrecheck,
+} from '../saxo/order-guards.js';
+import {
   findOptionLeg,
   getInstrumentDetails,
   getOptionChain,
@@ -552,7 +559,21 @@ const strategyPositionReviewSchema = z.object({
   })).min(0).max(50).default([]),
 });
 
-export function registerSaxoTools(server: McpServer, client: SaxoClient): void {
+export interface RegisterSaxoToolsOptions {
+  /**
+   * Register the saxo_oauth_* tools. These start a loopback listener, can
+   * open a browser and replace the in-process tokens, so they are only
+   * appropriate for a local (stdio) server. Defaults to true; the HTTP
+   * transport passes false.
+   */
+  enableOauthTools?: boolean;
+}
+
+export function registerSaxoTools(
+  server: McpServer,
+  client: SaxoClient,
+  options: RegisterSaxoToolsOptions = {},
+): void {
   server.registerTool(
     'saxo_capabilities',
     {
@@ -1291,7 +1312,7 @@ export function registerSaxoTools(server: McpServer, client: SaxoClient): void {
     },
     async input =>
       runAuditedTool(client, 'saxo_precheck_order', input, async () => {
-        applyOrderPolicy(input as PlaceOrderInput);
+        await enforcePlaceOrderPolicy(client, input as PlaceOrderInput, loadPolicy(), 'saxo_precheck_order');
         return jsonToolResult(await precheckOrder(client, input as PlaceOrderInput));
       }),
   );
@@ -1308,8 +1329,9 @@ export function registerSaxoTools(server: McpServer, client: SaxoClient): void {
     async input =>
       runAuditedTool(client, 'saxo_place_order', input, async () => {
         const order = input as PlaceOrderInput;
-        applyOrderPolicy(order);
-        await maybeRunPrecheck(client, order);
+        const policy = loadPolicy();
+        await enforcePlaceOrderPolicy(client, order, policy, 'saxo_place_order');
+        await runRequiredPrecheck(client, order, policy, 'saxo_place_order');
         const result = await placeOrder(client, order);
         return jsonToolResult(result);
       }),
@@ -1320,22 +1342,14 @@ export function registerSaxoTools(server: McpServer, client: SaxoClient): void {
     {
       title: 'Modify Order',
       description:
-        'Modify a working order (amount, price, duration). Same LIVE guards as saxo_place_order.',
+        'Modify a working order (amount, price, duration). Same LIVE guards as saxo_place_order: the existing order is loaded from Saxo and policy is evaluated against it merged with the requested changes; on LIVE with require_precheck_on_live the merged order is prechecked first.',
       inputSchema: modifyOrderSchema,
       annotations: WRITE_TOOL_ANNOTATIONS,
     },
     async input =>
       runAuditedTool(client, 'saxo_modify_order', input, async () => {
         const order = input as ModifyOrderInput;
-        applyOrderPolicy({
-          AccountKey: order.AccountKey,
-          Uic: order.Uic,
-          AssetType: order.AssetType,
-          Amount: order.Amount,
-          OrderType: order.OrderType,
-          OrderPrice: order.OrderPrice,
-          StopPrice: order.StopPrice,
-        });
+        await enforceModifyOrderPolicy(client, order, loadPolicy(), 'saxo_modify_order');
         return jsonToolResult(await modifyOrder(client, order));
       }),
   );
@@ -1387,8 +1401,9 @@ export function registerSaxoTools(server: McpServer, client: SaxoClient): void {
     async input =>
       runAuditedTool(client, 'saxo_place_multileg_order', input, async () => {
         const order = input as PlaceMultiLegOrderInput;
+        const policy = loadPolicy();
         applyMultiLegPolicy(order);
-        await maybeRunMultiLegPrecheck(client, order);
+        await runRequiredMultiLegPrecheck(client, order, policy, 'saxo_place_multileg_order');
         return jsonToolResult(await placeMultiLegOrder(client, order));
       }),
   );
@@ -1398,18 +1413,14 @@ export function registerSaxoTools(server: McpServer, client: SaxoClient): void {
     {
       title: 'Modify Multi-Leg Option Order',
       description:
-        'Modify a working multi-leg order. Only Amount (scaled symmetrically across legs) and OrderPrice can be changed.',
+        'Modify a working multi-leg order. Only Amount (scaled symmetrically across legs) and OrderPrice can be changed. The existing legs are loaded from Saxo and the full multi-leg policy is evaluated against them.',
       inputSchema: modifyMultiLegOrderSchema,
       annotations: WRITE_TOOL_ANNOTATIONS,
     },
     async input =>
       runAuditedTool(client, 'saxo_modify_multileg_order', input, async () => {
         const order = input as ModifyMultiLegOrderInput;
-        applyMultiLegPolicy({
-          AccountKey: order.AccountKey,
-          OrderPrice: order.OrderPrice,
-          Legs: typeof order.Amount === 'number' ? [{ Amount: order.Amount }] : [],
-        });
+        await enforceModifyMultiLegPolicy(client, order, loadPolicy(), 'saxo_modify_multileg_order');
         return jsonToolResult(await modifyMultiLegOrder(client, order));
       }),
   );
@@ -1432,18 +1443,21 @@ export function registerSaxoTools(server: McpServer, client: SaxoClient): void {
       }),
   );
 
+  if (options.enableOauthTools === false) {
+    return;
+  }
+
   server.registerTool(
     'saxo_oauth_login',
     {
       title: 'Run Saxo OAuth Login',
       description:
-        'Run the full Saxo OAuth2 + PKCE login in one MCP call. Starts a loopback callback listener, optionally opens the browser, waits for approval, exchanges tokens, updates the running MCP server, and optionally persists tokens to an env file.',
+        'Run the full Saxo OAuth2 + PKCE login in one MCP call. Starts a loopback callback listener, optionally opens the browser, waits for approval, exchanges tokens, updates the running MCP server, and optionally persists tokens to the .env file in the server working directory. Only available on the stdio transport.',
       inputSchema: {
         environment: z.enum(['sim', 'live']).optional(),
         timeoutSeconds: z.number().int().min(5).max(900).default(180),
         openBrowser: z.boolean().default(true),
         writeToEnvFile: z.boolean().default(false),
-        envFilePath: z.string().trim().min(1).optional(),
       },
       annotations: WRITE_TOOL_ANNOTATIONS,
     },
@@ -1458,7 +1472,7 @@ export function registerSaxoTools(server: McpServer, client: SaxoClient): void {
           client.setTokens(tokens);
 
           const envFilePath = input.writeToEnvFile
-            ? await persistOauthTokens(environment, tokens, input.envFilePath)
+            ? await persistOauthTokens(environment, tokens)
             : undefined;
 
           return jsonToolResult({
@@ -1515,12 +1529,11 @@ export function registerSaxoTools(server: McpServer, client: SaxoClient): void {
     {
       title: 'Complete Saxo OAuth Login',
       description:
-        'Wait for the Saxo callback, exchange the code for tokens, and update the running MCP server. Optionally writes tokens to a .env file.',
+        'Wait for the Saxo callback, exchange the code for tokens, and update the running MCP server. Optionally writes tokens to the .env file in the server working directory.',
       inputSchema: {
         ticketId: z.string().trim().min(1),
         timeoutSeconds: z.number().int().min(5).max(900).default(180),
         writeToEnvFile: z.boolean().default(false),
-        envFilePath: z.string().trim().min(1).optional(),
       },
       annotations: WRITE_TOOL_ANNOTATIONS,
     },
@@ -1531,7 +1544,7 @@ export function registerSaxoTools(server: McpServer, client: SaxoClient): void {
         client.setTokens(tokens);
 
         const envFilePath = input.writeToEnvFile
-          ? await persistOauthTokens(environment, tokens, input.envFilePath)
+          ? await persistOauthTokens(environment, tokens)
           : undefined;
 
         return jsonToolResult({
@@ -1565,9 +1578,10 @@ export function registerSaxoTools(server: McpServer, client: SaxoClient): void {
 async function persistOauthTokens(
   environment: string,
   tokens: { accessToken: string; refreshToken?: string; expiresAt?: number },
-  envFilePathInput?: string,
 ): Promise<string> {
-  const envFilePath = resolve(process.cwd(), envFilePathInput ?? '.env');
+  // Always the .env in the server's working directory; the target path is
+  // deliberately not caller-controllable.
+  const envFilePath = resolve(process.cwd(), '.env');
   const entries: Record<string, string> = {
     SAXO_ENVIRONMENT: environment,
     SAXO_ACCESS_TOKEN: tokens.accessToken,
@@ -1594,35 +1608,6 @@ function applyMultiLegPolicy(order: {
 }): void {
   const policy = loadPolicy();
   checkMultiLegOrder(order, policy);
-}
-
-async function maybeRunPrecheck(client: SaxoClient, order: PlaceOrderInput): Promise<void> {
-  if (!client.isLive()) {
-    return;
-  }
-
-  const policy = loadPolicy();
-  if (!policy.require_precheck_on_live) {
-    return;
-  }
-
-  await precheckOrder(client, order);
-}
-
-async function maybeRunMultiLegPrecheck(
-  client: SaxoClient,
-  order: PlaceMultiLegOrderInput,
-): Promise<void> {
-  if (!client.isLive()) {
-    return;
-  }
-
-  const policy = loadPolicy();
-  if (!policy.require_precheck_on_live) {
-    return;
-  }
-
-  await precheckMultiLegOrder(client, order);
 }
 
 async function runAuditedTool<T>(

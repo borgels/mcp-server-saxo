@@ -8,6 +8,8 @@ import { registerSaxoTools } from './tools/saxo.js';
 export interface CreateServerOptions {
   client?: SaxoClient;
   clientOptions?: SaxoClientOptions;
+  /** Register saxo_oauth_* tools (local/stdio only). Defaults to true. */
+  enableOauthTools?: boolean;
 }
 
 const PACKAGE_VERSION = readPackageVersion();
@@ -19,7 +21,7 @@ export function createServer(options: CreateServerOptions = {}): McpServer {
   });
 
   const client = options.client ?? new SaxoClient(options.clientOptions);
-  registerSaxoTools(server, client);
+  registerSaxoTools(server, client, { enableOauthTools: options.enableOauthTools ?? true });
 
   return server;
 }

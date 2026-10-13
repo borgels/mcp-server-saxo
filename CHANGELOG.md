@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- `max_notional` is now enforced for orders without a usable price (market
+  orders are priced from an `infoprices` quote and refused if none is
+  available), for related `Orders[]`, and for order modifications.
+- `saxo_modify_order` / `saxo_modify_multileg_order` evaluate policy against
+  the existing order loaded from Saxo, and run the LIVE precheck.
+- `require_precheck_on_live` now aborts unless the precheck returns
+  `PreCheckResult: Ok` without `ErrorInfo`.
+- `saxo_oauth_*` tools are no longer exposed on the HTTP transport, and the
+  `envFilePath` parameter was removed (tokens persist only to `./.env`).
+- HTTP bearer token comparison is constant-time; caller-supplied URL path
+  parameters are validated before encoding.
+- Dependency updates; release workflow action pinned to a commit SHA.
+
 ### Added
 
 - `saxo_get_session_capabilities` and `saxo_set_session_trade_level` expose

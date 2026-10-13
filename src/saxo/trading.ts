@@ -1,4 +1,5 @@
 import type { SaxoClient } from './client.js';
+import { pathSegment } from './path.js';
 
 export type OrderDurationType =
   | 'DayOrder'
@@ -20,6 +21,7 @@ export interface RelatedOrder {
   AssetType: string;
   BuySell: 'Buy' | 'Sell';
   Amount: number;
+  ToOpenClose?: 'ToOpen' | 'ToClose';
   OrderType: string;
   OrderPrice?: number;
   StopPrice?: number;
@@ -72,7 +74,7 @@ export interface CancelOrderInput {
 }
 
 export function cancelOrder(client: SaxoClient, input: CancelOrderInput): Promise<unknown> {
-  return client.delete(`/trade/v2/orders/${input.orderIds.map(encodeURIComponent).join(',')}`, {
+  return client.delete(`/trade/v2/orders/${input.orderIds.map(id => pathSegment(id, 'orderId')).join(',')}`, {
     AccountKey: input.accountKey,
   });
 }
@@ -133,7 +135,7 @@ export function cancelMultiLegOrder(
   input: CancelMultiLegOrderInput,
 ): Promise<unknown> {
   return client.delete(
-    `/trade/v2/orders/multileg/${encodeURIComponent(input.multiLegOrderId)}`,
+    `/trade/v2/orders/multileg/${pathSegment(input.multiLegOrderId, 'multiLegOrderId')}`,
     { AccountKey: input.accountKey },
   );
 }

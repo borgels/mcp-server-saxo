@@ -1,4 +1,5 @@
 import type { SaxoClient } from './client.js';
+import { pathSegment } from './path.js';
 
 export type PriceAlertComparisonOperator = 'GreaterOrEqual' | 'LessOrEqual';
 export type PriceAlertDefinitionState = 'Disabled' | 'Enabled' | 'RecentlyTriggered';
@@ -140,5 +141,5 @@ function requiredEnum<T extends string>(value: T | undefined, name: string): T {
 }
 
 function formatAlertDefinitionId(value: PriceAlertDefinitionId): string {
-  return encodeURIComponent(String(value));
+  return pathSegment(value, 'AlertDefinitionId');
 }

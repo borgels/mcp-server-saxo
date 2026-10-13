@@ -1,4 +1,5 @@
 import type { SaxoClient } from './client.js';
+import { pathSegment } from './path.js';
 
 export type VolatilityRegime = 'low' | 'medium' | 'high' | 'unknown';
 
@@ -65,7 +66,7 @@ export async function getOptionVolatilityContext(
     if (created) {
       try {
         await client.delete(
-          `/trade/v1/optionschain/subscriptions/${encodeURIComponent(contextId)}/${encodeURIComponent(referenceId)}`,
+          `/trade/v1/optionschain/subscriptions/${pathSegment(contextId, 'ContextId')}/${pathSegment(referenceId, 'ReferenceId')}`,
         );
       } catch {
         // Best-effort cleanup. The subscription also has a Saxo inactivity timeout.
