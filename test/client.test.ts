@@ -473,3 +473,60 @@ function jsonResponse(payload: unknown, status = 200, headers: Record<string, st
     },
   });
 }
+
+describe('SaxoClient hardening', () => {
+  const savedTimeout = process.env.SAXO_TIMEOUT_MS;
+  afterEach(() => {
+    if (savedTimeout === undefined) {
+      delete process.env.SAXO_TIMEOUT_MS;
+    } else {
+      process.env.SAXO_TIMEOUT_MS = savedTimeout;
+    }
+  });
+
+  it('never follows redirects and reports them as errors', async () => {
+    const calls: RequestInit[] = [];
+    const client = new SaxoClient({
+      environment: 'sim', accessToken: 'test-token',
+      fetchImpl: (async (_url: string, init: RequestInit) => {
+        calls.push(init);
+        return new Response(null, { status: 302, headers: { location: 'https://elsewhere.example/' } });
+      }) as unknown as typeof fetch,
+    });
+    await expect(client.post('/trade/v2/orders', { Amount: 1 })).rejects.toThrow(/302/);
+    expect(calls.length).toBeGreaterThan(0);
+    expect(calls.every(init => init.redirect === 'manual')).toBe(true);
+  });
+
+  it('reads at most 64 KB of an error body', async () => {
+    const client = new SaxoClient({
+      environment: 'sim', accessToken: 'test-token',
+      fetchImpl: (async () => new Response('x'.repeat(1_000_000), { status: 500 })) as unknown as typeof fetch,
+    });
+    const error = (await client.post('/trade/v2/orders', { Amount: 1 }).catch((e: unknown) => e)) as Error;
+    expect(error.message.length).toBeLessThan(70_000);
+  });
+
+  it('rejects an invalid SAXO_TIMEOUT_MS instead of using NaN', () => {
+    process.env.SAXO_TIMEOUT_MS = '30s';
+    expect(() => new SaxoClient()).toThrow(/SAXO_TIMEOUT_MS/);
+    process.env.SAXO_TIMEOUT_MS = '5000';
+    expect(() => new SaxoClient()).not.toThrow();
+  });
+});
+
+describe('Saxo token requests', () => {
+  it('never follow redirects with the app secret or refresh token', async () => {
+    const { refreshAccessToken } = await import('../src/saxo/auth.js');
+    const calls: RequestInit[] = [];
+    const fetchImpl = (async (_url: string, init: RequestInit) => {
+      calls.push(init);
+      return new Response(null, { status: 307, headers: { location: 'https://elsewhere.example/token' } });
+    }) as unknown as typeof fetch;
+    await expect(
+      refreshAccessToken({ refreshToken: 'r', appKey: 'k', appSecret: 's', environment: 'sim', fetchImpl }),
+    ).rejects.toThrow(/307/);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]!.redirect).toBe('manual');
+  });
+});

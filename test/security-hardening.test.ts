@@ -397,9 +397,10 @@ describe('path parameter guard', () => {
 
 describe('HTTP bearer token', () => {
   it('compares in constant time and still enforces the token', () => {
-    process.env.MCP_HTTP_TOKEN = 'secret';
-    expect(() => assertAuthorized({ headers: { authorization: 'Bearer secre' } } as never)).toThrow(HttpRequestError);
-    expect(() => assertAuthorized({ headers: { authorization: 'Bearer secret' } } as never)).not.toThrow();
+    const token = 'secret-0123456789abcdef0123456789';
+    const config = { host: '127.0.0.1', port: 0, maxBodyBytes: 1024, httpToken: token };
+    expect(() => assertAuthorized({ headers: { authorization: `Bearer ${token.slice(0, -1)}` } } as never, config)).toThrow(HttpRequestError);
+    expect(() => assertAuthorized({ headers: { authorization: `Bearer ${token}` } } as never, config)).not.toThrow();
     expect(constantTimeEquals(undefined, 'x')).toBe(false);
     expect(constantTimeEquals(['x'], 'x')).toBe(false);
   });

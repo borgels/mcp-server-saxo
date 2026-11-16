@@ -5,10 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.3.0] - 2026-11-16
+
+### Upgrade notes
+
+- A non-loopback HTTP bind now requires `MCP_HTTP_TOKEN` (at
+  least 32 characters, e.g. `openssl rand -hex 32`); an invalid
+  `SAXO_TIMEOUT_MS` (for example `30s`) now prevents startup. Trading logic,
+  order guards and policy limits are unchanged.
 
 ### Security
 
+- HTTP transport: refuses to start without `MCP_HTTP_TOKEN` when bound to a
+  non-loopback address or with `MCP_ALLOW_ANY_ORIGIN=true` (explicit escape
+  hatch: `MCP_HTTP_ALLOW_UNAUTHENTICATED=true`). The token must be at least 32
+  printable ASCII characters.
+- HTTP transport: failed authentications are limited per client address (429
+  with `Retry-After`; valid tokens are never throttled;
+  `MCP_AUTH_FAILURE_LIMIT`, `MCP_AUTH_FAILURE_WINDOW_MS`), `Host` header check
+  on loopback binds (`MCP_ALLOWED_HOSTS`), 401 with `WWW-Authenticate: Bearer`.
+- Saxo API, token and Alpha Vantage requests never follow redirects, so the
+  bearer token, app secret, refresh token, order requests and the Alpha Vantage
+  key are only sent to the configured origin. Saxo error bodies are read up to
+  64 KB; Alpha Vantage error text is redacted before truncation.
 - `max_notional` is now enforced for orders without a usable price (market
   orders are priced from an `infoprices` quote and refused if none is
   available), for related `Orders[]`, and for order modifications.
@@ -33,6 +52,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- HTTP transport: invalid JSON returns 400 (JSON-RPC parse error) instead of
+  500; oversized bodies are refused from `Content-Length` before reading; one
+  log line per rejected request; `GET /healthz`; graceful shutdown on
+  SIGTERM/SIGINT.
+- `PORT`, `MCP_MAX_BODY_BYTES`, `SAXO_TIMEOUT_MS` and the boolean `MCP_*` flags
+  are validated; an invalid value now stops the server with a clear error
+  instead of being ignored or becoming `NaN`. Unresolved MCPB `${user_config.*}`
+  placeholders are still treated as unset.
+- Dependency updates (`@modelcontextprotocol/sdk` 1.32.2, patched transitive
+  dependencies); workflow actions pinned to commit SHAs; CI fails on
+  high/critical production advisories.
 - Breaking: strategy screeners were renamed to neutral factor/context tools:
   `saxo_generate_option_strategy_candidates`,
   `saxo_screen_option_strategy_factors`, `saxo_screen_stock_factors`, and
@@ -305,8 +335,7 @@ released between 0.1.0 and 0.1.1.
 ### Distribution
 
 - Published to npm under the **`@borgels/`** scope:
-  `@borgels/mcp-server-saxo`. Adopts the Borgels MCP server family
-  convention. Use `npx -y @borgels/mcp-server-saxo` from any MCP
+  `@borgels/mcp-server-saxo`. Use `npx -y @borgels/mcp-server-saxo` from any MCP
   client that speaks the standard `mcpServers` config shape.
 - Ships an **MCPB bundle** (MCP Bundle — Anthropic's renamed DXT
   format) `mcp-server-saxo-v<version>.mcpb` attached to every GitHub
@@ -532,11 +561,11 @@ environments, with strict default-deny guards on LIVE order placement.
 - OAuth callback listener only binds to loopback (`127.0.0.1` /
   `localhost`); non-loopback `SAXO_REDIRECT_URI` values are rejected at
   startup.
-- Reused the `ip-address`, `hono`, and `fast-uri` npm `overrides` from the
-  sibling Borgels MCP servers to clear transitive Dependabot alerts
+- Added `ip-address`, `hono`, and `fast-uri` npm `overrides` to clear
+  transitive Dependabot alerts
   pulled in via the MCP SDK's HTTP transport.
 
-[Unreleased]: https://github.com/Borgels/mcp-server-saxo/compare/v0.2.0...HEAD
+[0.3.0]: https://github.com/Borgels/mcp-server-saxo/compare/v0.2.2...v0.3.0
 [0.2.0]: https://github.com/Borgels/mcp-server-saxo/compare/v0.1.2...v0.2.0
 [0.1.2]: https://github.com/Borgels/mcp-server-saxo/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/Borgels/mcp-server-saxo/compare/v0.1.0...v0.1.1

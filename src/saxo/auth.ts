@@ -51,7 +51,8 @@ export async function refreshAccessToken(input: RefreshAccessTokenInput): Promis
   });
   const { headers, body } = buildTokenRequest(params, input.appKey, input.appSecret);
 
-  const response = await fetchImpl(endpoints.token, { method: 'POST', headers, body });
+  // Never follow redirects: the request carries the app secret and refresh/authorization code.
+  const response = await fetchImpl(endpoints.token, { method: 'POST', headers, body, redirect: 'manual' });
   const text = await response.text();
   if (!response.ok) {
     throw new Error(`Saxo token refresh failed with HTTP ${response.status}: ${text || 'no body'}`);
@@ -97,7 +98,8 @@ export async function exchangeCodeForTokens(input: ExchangeCodeInput): Promise<S
   });
   const { headers, body } = buildTokenRequest(params, input.appKey, input.appSecret);
 
-  const response = await fetchImpl(endpoints.token, { method: 'POST', headers, body });
+  // Never follow redirects: the request carries the app secret and refresh/authorization code.
+  const response = await fetchImpl(endpoints.token, { method: 'POST', headers, body, redirect: 'manual' });
   const text = await response.text();
   if (!response.ok) {
     throw new Error(`Saxo token exchange failed with HTTP ${response.status}: ${text || 'no body'}`);
