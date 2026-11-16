@@ -151,7 +151,7 @@ jobs:
       - name: Pack MCPB bundle (with prod-only deps)
         run: |
           rm -rf node_modules
-          npm ci --omit=dev
+          npm ci --omit=dev --ignore-scripts
           npx -y -p @anthropic-ai/mcpb@^2.1.2 mcpb pack . "mcp-server-saxo-${GITHUB_REF_NAME}.mcpb"
 
       - name: Create GitHub Release

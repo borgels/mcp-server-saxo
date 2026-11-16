@@ -89,6 +89,20 @@ describe('HTTP transport (integration)', () => {
     expect(JSON.parse(reply.body)).toEqual({ status: 'ok' });
   });
 
+  it('never exposes the saxo_oauth_* tools through the default HTTP server factory', async () => {
+    running = await startHttpServer(
+      { host: '127.0.0.1', port: 0, maxBodyBytes: 1024 * 1024, httpToken: TOKEN },
+      { log: line => logs.push(line) },
+    );
+    const reply = await send(running.port, {
+      headers: { ...mcpHeaders, Authorization: `Bearer ${TOKEN}` },
+      body: toolsList,
+    });
+    expect(reply.status).toBe(200);
+    expect(reply.body).toContain('saxo_get_balance');
+    expect(reply.body).not.toContain('saxo_oauth_');
+  });
+
   it('returns 401 with WWW-Authenticate without or with a wrong token', async () => {
     const port = await start();
     const missing = await send(port, { headers: mcpHeaders, body: toolsList });
