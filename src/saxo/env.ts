@@ -57,3 +57,23 @@ export function readNumberEnv(name: string, fallback: number): number {
   const parsed = Number(raw);
   return Number.isFinite(parsed) ? parsed : fallback;
 }
+
+/**
+ * Read an integer env var within [min, max]. Unset values and unresolved
+ * placeholders return the fallback; anything else that is not a plain integer
+ * in range throws, so a typo fails loudly instead of silently changing a
+ * limit or timeout.
+ */
+export function readIntegerEnv(name: string, fallback: number, options: { min?: number; max?: number } = {}): number {
+  const raw = readEnv(name)?.trim();
+  if (raw === undefined || raw === '') {
+    return fallback;
+  }
+  const min = options.min ?? 1;
+  const max = options.max ?? Number.MAX_SAFE_INTEGER;
+  const parsed = /^[+-]?\d+$/.test(raw) ? Number(raw) : Number.NaN;
+  if (!Number.isSafeInteger(parsed) || parsed < min || parsed > max) {
+    throw new Error(`${name} must be an integer between ${min} and ${max}; got ${JSON.stringify(raw.slice(0, 40))}.`);
+  }
+  return parsed;
+}

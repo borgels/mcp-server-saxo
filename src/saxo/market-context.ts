@@ -325,7 +325,7 @@ async function fetchAlphaEarnings(
   }
   const text = await response.text();
   if (/^\s*(Information|Note|Error Message)/i.test(text)) {
-    throw new Error(`Alpha Vantage EARNINGS_CALENDAR returned ${text.slice(0, 160)}.`);
+    throw new Error(`Alpha Vantage EARNINGS_CALENDAR returned ${redactSensitiveText(text).slice(0, 160)}.`);
   }
   const parsedRows = parseCsv(text);
   const invalidMessage = alphaVantageCsvMessage(parsedRows, text);
@@ -387,7 +387,8 @@ async function fetchAlphaVantage(
       await new Promise(resolve => setTimeout(resolve, ALPHA_VANTAGE_MIN_INTERVAL_MS - elapsed));
     }
     alphaVantageLastRequestAt = Date.now();
-    return fetchImpl(url, init);
+    // The API key is part of the query string; never follow redirects with it.
+    return fetchImpl(url, { ...init, redirect: 'manual' });
   });
   alphaVantageRequestGate = run.then(() => undefined, () => undefined);
   return run;

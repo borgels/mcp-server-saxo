@@ -1,6 +1,6 @@
 import { SaxoHttpError } from '../errors.js';
 import { refreshAccessToken, type SaxoTokenSet } from './auth.js';
-import { readEnv, readNumberEnv } from './env.js';
+import { readEnv, readIntegerEnv } from './env.js';
 import {
   getEnvironmentEndpoints,
   resolveEnvironment,
@@ -54,7 +54,7 @@ export class SaxoClient {
     assertSafeBaseUrl(this.baseUrl);
 
     this.fetchImpl = options.fetchImpl ?? fetch;
-    this.timeoutMs = options.timeoutMs ?? readNumberEnv('SAXO_TIMEOUT_MS', 30_000);
+    this.timeoutMs = options.timeoutMs ?? readIntegerEnv('SAXO_TIMEOUT_MS', 30_000, { min: 1, max: 600_000 });
   }
 
   isLive(): boolean {
@@ -182,6 +182,9 @@ export class SaxoClient {
     const init: RequestInit = {
       method,
       headers,
+      // Never follow redirects: the bearer token and order requests must only
+      // reach the configured API origin. A 3xx is reported as an error.
+      redirect: 'manual',
       signal: AbortSignal.timeout(this.timeoutMs),
     };
 
@@ -247,8 +250,15 @@ export class SaxoClient {
   }
 }
 
+const MAX_ERROR_BODY_BYTES = 64 * 1024;
+
 async function readResponseBody(response: Response): Promise<unknown> {
-  const text = await response.text();
+  if (response.status >= 300 && response.status < 400) {
+    await response.body?.cancel().catch(() => undefined);
+    return 'Redirect responses are not followed, so credentials are never sent to another host.';
+  }
+  // Error bodies are read only up to MAX_ERROR_BODY_BYTES.
+  const text = response.ok ? await response.text() : await readTextUpTo(response, MAX_ERROR_BODY_BYTES);
   if (!text) {
     return null;
   }
@@ -263,6 +273,31 @@ async function readResponseBody(response: Response): Promise<unknown> {
   } catch {
     return text;
   }
+}
+
+/** Reads at most `limit` bytes of a response body as text and discards the rest. */
+export async function readTextUpTo(response: Response, limit: number): Promise<string> {
+  if (!response.body) {
+    return '';
+  }
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    while (total < limit) {
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+      chunks.push(value);
+      total += value.byteLength;
+    }
+  } catch {
+    // Report what arrived before the body failed.
+  } finally {
+    await reader.cancel().catch(() => undefined);
+  }
+  return Buffer.concat(chunks).subarray(0, limit).toString('utf8');
 }
 
 function trimTrailingSlash(value: string): string {

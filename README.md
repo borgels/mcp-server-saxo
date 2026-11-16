@@ -1,12 +1,11 @@
 # mcp-server-saxo
 
 TypeScript MCP server for the Saxo Bank OpenAPI. Works against both the **SIM**
-(simulation/demo) and **LIVE** environments. Same shape as the rest of the
-Borgels MCP server family: typed, documented, policy-aware, credential-sane,
-and audit-friendly.
+(simulation/demo) and **LIVE** environments: typed, documented, policy-aware,
+credential-sane, and audit-friendly.
 
-> **Disclaimer:** This is an independent, unofficial project by Borgels.
-> Borgels is not affiliated with, endorsed by, or supported by Saxo Bank A/S.
+This is an independent, unofficial project. It is not developed, endorsed or supported by Saxo Bank A/S.
+
 > "Saxo", "Saxo Bank", and the Saxo OpenAPI are referenced only to describe
 > what this server talks to. You need your own Saxo developer credentials, and
 > use of the Saxo OpenAPI is subject to Saxo Bank's own terms and licensing.
@@ -588,12 +587,51 @@ PORT=3000 SAXO_ACCESS_TOKEN=... npm run dev:http
 ```
 
 By default the HTTP server binds to `127.0.0.1`, limits request bodies to
-10 MiB, allows browser CORS only from loopback origins, and does not require
-an HTTP Bearer token. Override with `MCP_HTTP_HOST`, `MCP_MAX_BODY_BYTES`,
-`MCP_ALLOWED_ORIGINS`, `MCP_ALLOW_ANY_ORIGIN=true`, and `MCP_HTTP_TOKEN`
-(compared in constant time). The MCP endpoint is
+10 MiB and allows browser CORS only from loopback origins. Without
+`MCP_HTTP_TOKEN` it only starts on a loopback bind (and logs a warning); any
+other bind requires the token. The MCP endpoint is
 `POST http://127.0.0.1:3000/mcp`. The `saxo_oauth_*` tools are not available
 over HTTP.
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `MCP_HTTP_HOST` / `HOST` | `127.0.0.1` | Bind address. |
+| `PORT` | `3000` | Listen port (1-65535). |
+| `MCP_HTTP_TOKEN` | - | Bearer token required on `/mcp`; at least 32 printable ASCII characters (e.g. `openssl rand -hex 32`). Required for a non-loopback bind or `MCP_ALLOW_ANY_ORIGIN=true`. |
+| `MCP_HTTP_ALLOW_UNAUTHENTICATED` | `false` | Serve `/mcp` without a token on a non-loopback bind or with `MCP_ALLOW_ANY_ORIGIN` (logs a warning). Only when access is restricted by other means. |
+| `MCP_MAX_BODY_BYTES` | `10485760` | Largest accepted request body; larger bodies get 413. |
+| `MCP_ALLOWED_ORIGINS` | localhost origins | Comma-separated exact `Origin` values allowed. |
+| `MCP_ALLOW_ANY_ORIGIN` | `false` | Allow any `Origin`; requires `MCP_HTTP_TOKEN`. |
+| `MCP_ALLOWED_HOSTS` | see below | Comma-separated host names accepted in the `Host` header. |
+| `MCP_AUTH_FAILURE_LIMIT` | `20` | Failed authentications per client address and window before further failures get 429; `0` disables. |
+| `MCP_AUTH_FAILURE_WINDOW_MS` | `60000` | Window for the limit above. |
+| `SAXO_TIMEOUT_MS` | `30000` | Upstream request timeout (1-600000 ms). |
+
+The server refuses to start when it would expose `/mcp` without a token: a
+non-loopback bind or `MCP_ALLOW_ANY_ORIGIN=true` without `MCP_HTTP_TOKEN`
+(unless `MCP_HTTP_ALLOW_UNAUTHENTICATED=true`). Invalid numbers or booleans in
+these variables also stop it at startup instead of being ignored. On a loopback
+bind, only `localhost`, `127.0.0.1`, `[::1]` or the bind address are accepted
+in the `Host` header (DNS-rebinding protection); set `MCP_ALLOWED_HOSTS` to
+change this. `GET /healthz` answers without authentication.
+
+## Security model
+
+- This server uses one shared upstream identity: every caller acts with the Saxo
+  access token configured in the environment. It does not authenticate or
+  distinguish end users itself.
+- Per-user authentication and authorization belong in an identity-aware gateway
+  in front of the HTTP transport, which holds `MCP_HTTP_TOKEN`.
+- Tool access is not data access control: anyone who can call the tools can
+  reach whatever the configured Saxo credentials can reach. Use credentials with
+  the narrowest scope that works.
+- Order placement is governed by `SAXO_ENABLE_LIVE_TRADING` and the policy file,
+  not by who calls the tool. Set `MCP_HTTP_TOKEN` whenever the HTTP server is
+  reachable by anything other than you.
+- Upstream requests never follow redirects, so credentials are only sent to the
+  configured API origin.
+- The HTTP server does not terminate TLS. Put it behind a TLS-terminating proxy
+  or keep it on a private network.
 
 ## Verification
 
@@ -653,8 +691,8 @@ dist-tag and as a GitHub pre-release.
    secret. From this point on, every release authenticates via
    GitHub Actions OIDC — no long-lived secrets anywhere.
 
-The same three steps repeat once per sibling Borgels MCP server when
-they migrate to this template.
+The same three steps apply to any other package published from a
+workflow of this shape.
 
 ## Rate Limits
 

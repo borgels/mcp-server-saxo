@@ -1,6 +1,6 @@
 {
   "name": "@borgels/mcp-server-saxo",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "description": "MCP server for the Saxo Bank OpenAPI (SIM and LIVE trading).",
   "type": "module",
   "main": "./dist/transports/stdio.js",
@@ -64,15 +64,18 @@
   },
   "homepage": "https://github.com/borgels/mcp-server-saxo#readme",
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.32.1",
+    "@modelcontextprotocol/sdk": "^1.32.2",
     "ws": "^8.22.0",
     "zod": "^4.6.7"
   },
   "overrides": {
-    "ip-address": ">=10.1.1",
-    "hono": ">=4.12.21",
-    "fast-uri": ">=3.1.2",
-    "esbuild": "^0.28.2"
+    "esbuild": "^0.28.2",
+    "ip-address": "^10.1.1",
+    "hono": "^4.13.19",
+    "@hono/node-server": "^2.1.8",
+    "fast-uri": "^3.1.9",
+    "qs": "^6.17.1",
+    "body-parser": "^2.4.0"
   },
   "devDependencies": {
     "@types/node": "^25.9.9",
@@ -80,6 +83,6 @@
     "tsup": "^8.5.1",
     "tsx": "^4.23.15",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.11"
+    "vitest": "^4.1.12"
   }
 }
