@@ -79,7 +79,7 @@
     "body-parser": "^2.4.0"
   },
   "devDependencies": {
-    "@types/node": "^25.9.9",
+    "@types/node": "^26.6.6",
     "@types/ws": "^8.18.2",
     "tsup": "^8.5.1",
     "tsx": "^4.23.15",
