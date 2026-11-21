@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-11-21
+
+- License changed from Apache-2.0 to the Functional Source License, Version 1.1,
+  ALv2 Future License (FSL-1.1-ALv2). You may read, run, modify and use the code
+  internally and contribute changes; offering it as a competing commercial
+  product or service is not allowed. Each version becomes Apache-2.0 two years
+  after its release. Versions released before 0.4.0 remain under Apache-2.0
+  (see `NOTICE`).
+
 ## [0.3.0] - 2026-11-16
 
 ### Upgrade notes

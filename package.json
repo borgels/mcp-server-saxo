@@ -1,6 +1,6 @@
 {
   "name": "@borgels/mcp-server-saxo",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "MCP server for the Saxo Bank OpenAPI (SIM and LIVE trading).",
   "type": "module",
   "main": "./dist/transports/stdio.js",
@@ -16,6 +16,7 @@
     "manifest.json",
     "README.md",
     "LICENSE",
+    "NOTICE",
     "CHANGELOG.md",
     ".env.example",
     "policy.example.json"
@@ -51,7 +52,7 @@
     "borgels"
   ],
   "author": "Borgels",
-  "license": "Apache-2.0",
+  "license": "FSL-1.1-ALv2",
   "engines": {
     "node": ">=20.11"
   },
